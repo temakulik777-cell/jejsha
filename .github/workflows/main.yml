@@ -1,0 +1,64 @@
+name: Build APK from 1616.zip
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Unzip 1616.zip
+      run: |
+        unzip 1616.zip -d project_files
+        echo "=== Содержимое корня ==="
+        ls -la project_files
+        # Ищем, где лежит файл настроек Gradle
+        find project_files -name "build.gradle" -o -name "settings.gradle"
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Build APK with Gradle
+      run: |
+        # Ищем папку, где лежит gradlew или build.gradle
+        if [ -f "project_files/gradlew" ]; then
+          cd project_files
+        elif [ -d "project_files/1616" ]; then
+          cd project_files/1616
+        else
+          # Если папка называется иначе, ищем settings.gradle
+          SETTINGS_DIR=$(find project_files -name "settings.gradle" | head -n 1 | xargs dirname)
+          if [ -n "$SETTINGS_DIR" ]; then
+            cd "$SETTINGS_DIR"
+          else
+            echo "Ошибка: Не найдены файлы Gradle!"
+            exit 1
+          fi
+        fi
+        
+        echo "Сборка в папке: $(pwd)"
+        
+        # Даем права на запуск
+        chmod +x gradlew || true
+        
+        # Собираем Debug APK (его проще всего установить)
+        ./gradlew assembleDebug
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Compiled-APK
+        # Забираем готовый .apk файл
+        path: "**/build/outputs/apk/debug/*.apk"
